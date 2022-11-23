@@ -6,6 +6,9 @@ from kivy.uix.button import Label
 from kivy.graphics import Color, Rectangle
 from kivy.properties import StringProperty
 import whisper
+from transformers import M2M100ForConditionalGeneration
+from tokenization_small100 import SMALL100Tokenizer
+
 import tempfile
 import os
 import sys
@@ -16,15 +19,18 @@ import sys
 import speech_recognition as sr
 
 
-for index, name in enumerate(sr.Microphone.list_microphone_names()):
-    print("Microphone with name \"{1}\" found for `Microphone(device_index={0})`".format(index, name))
+"""for index, name in enumerate(sr.Microphone.list_microphone_names()):
+    print("Microphone with name \"{1}\" found for `Microphone(device_index={0})`".format(index, name))"""
 
 r = sr.Recognizer()
 m = sr.Microphone()
 
 record_var = ""
 
-model = whisper.load_model("base")
+model_whisper = whisper.load_model("base")
+model = M2M100ForConditionalGeneration.from_pretrained("alirezamsh/small100")
+tokenizer = SMALL100Tokenizer.from_pretrained("alirezamsh/small100")
+
 
 class RecordButton(Button):
     # String Property to Hold output for publishing by Textinput
@@ -41,13 +47,13 @@ class RecordButton(Button):
         try:
             # recognize speech using Google Speech Recognition
             #value = r.recognize_google(audio)
-            value = model.transcribe("microphone-results.flac", task='translate')
+            value = model_whisper.transcribe("microphone-results.flac", task='translate')
             #value = r.recognize_whisper(audio, model="small")
             #value = audio.get_flac_data()
-            print(value)
+            #print(value)
             self.output = "You said \"{}\"".format(value)
             #record_var = "You said \"{}\"".format(value)
-            return value['text']
+            return value
 
         except sr.UnknownValueError:
             self.output = ("Oops! Didn't catch that")
@@ -74,8 +80,11 @@ class ClearApp(App):
         self.MainLayout.add_widget(self.inputbox)
 
         #Row 2, record button
-        self.recordbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.2))
-        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1,1))
+        self.recordbox = BoxLayout(orientation='vertical', size_hint=(1, 0.2))
+        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1,0.7))
+        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.3), disabled=True, font_size=12, background_color='10B3CD')
+        self.lang.text = 'Detected Language: es'
+        self.recordbox.add_widget(self.lang)
         self.recordbox.add_widget(self.btnR)
         self.MainLayout.add_widget(self.recordbox)
 
@@ -93,13 +102,13 @@ class ClearApp(App):
         self.buttonbox = BoxLayout(orientation='vertical', size_hint=(.2,1))
 
         self.txt = TextInput(hint_text='Write here', size_hint=(.8,1), disabled=False)
-        self.btnT = Button(text='Translate', on_press=self.clearText, size_hint=(1, .5))
-        self.btnN = Button(text='Narrate', on_press=self.clearText, size_hint=(1, .5))
+        self.btnT = Button(text='Translate', on_press=self.english2output, size_hint=(1, .5))
+        #self.btnN = Button(text='Narrate', on_press=self.clearText, size_hint=(1, .5))
 
         self.box.add_widget(self.txt)
         self.box.add_widget(self.buttonbox)
         self.buttonbox.add_widget(self.btnT)
-        self.buttonbox.add_widget(self.btnN)
+        #self.buttonbox.add_widget(self.btnN)
         self.MainLayout.add_widget(self.box)
 
 
@@ -114,7 +123,21 @@ class ClearApp(App):
     def records(self, instance):
         val = RecordButton.record(instance)
         print(val)
-        self.input.text = val
+        self.lang.text = 'Detected Language: ' + str(val['language'])
+        self.input.text = val['text']
+
+    def english2output(self, instance):
+        input_text = self.txt.text
+        lang = self.lang.text[19:]
+        #print(self.lang.text[19:])
+        tokenizer.tgt_lang = lang
+        encoded_text = tokenizer(input_text, return_tensors="pt")
+        generated_tokens = model.generate(**encoded_text)
+        results = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+        print(results)
+        self.output.text = results[0]
+
+
 
 #model = whisper.load_model("tiny")
 ClearApp().run()
