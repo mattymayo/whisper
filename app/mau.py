@@ -3,6 +3,7 @@ from kivy.uix.button import  Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import StringProperty
+from kivy.uix.screenmanager import ScreenManager, Screen
 import whisper
 from transformers import M2M100ForConditionalGeneration
 from tokenization_small100 import SMALL100Tokenizer
@@ -47,45 +48,46 @@ with m as source:
     r.adjust_for_ambient_noise(source)
 
 
-class ClearApp(App):
-    def build(self):
+class TranslateScreen(Screen):
+    def __init__(self, **kwargs):
+        super(TranslateScreen, self).__init__(**kwargs)
         self.MainLayout = BoxLayout(orientation='vertical')
 
-        #Row 1, text input
+        # Row 1, text input
         self.inputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.4))
-        self.input = TextInput(hint_text='Translated input', size_hint=(1,1), disabled=True, font_size=20)
+        self.input = TextInput(hint_text='Translated input', size_hint=(1, 1), disabled=True, font_size=20)
         self.inputbox.add_widget(self.input)
         self.MainLayout.add_widget(self.inputbox)
 
-        #Row 2, record button
+        # Row 2, record button
         self.recordbox = BoxLayout(orientation='vertical', size_hint=(1, 0.2))
-        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1,0.7))
-        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.3), disabled=True, font_size=12, background_color='10B3CD')
+        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1, 0.7))
+        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.3), disabled=True, font_size=12,
+                              background_color='10B3CD')
         self.lang.text = 'Detected Language: es'
         self.recordbox.add_widget(self.lang)
         self.recordbox.add_widget(self.btnR)
         self.MainLayout.add_widget(self.recordbox)
 
-        #Row 3, text output
+        # Row 3, text output
         self.outputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.4))
-        self.output = TextInput(hint_text='Translated output', size_hint=(1,1), disabled=True, font_size=20)
+        self.output = TextInput(hint_text='Translated output', size_hint=(1, 1), disabled=True, font_size=20)
         self.outputbox.add_widget(self.output)
         self.MainLayout.add_widget(self.outputbox)
 
-        #Bottom row, text input and one button
+        # Bottom row, text input and one button
         self.box = BoxLayout(orientation='horizontal', size_hint=(1, 0.2))
-        self.buttonbox = BoxLayout(orientation='vertical', size_hint=(.2,1))
-        self.txt = TextInput(hint_text='Write here', size_hint=(.8,1), disabled=False)
+        self.buttonbox = BoxLayout(orientation='vertical', size_hint=(.2, 1))
+        self.txt = TextInput(hint_text='Write here', size_hint=(.8, 1), disabled=False)
         self.btnT = Button(text='Translate', on_press=self.english2output, size_hint=(1, .5))
+        self.btnBack = Button(text='Menu', size_hint=(1, 0.5))
+        self.btnBack.bind(on_press=self.back)
         self.box.add_widget(self.txt)
         self.box.add_widget(self.buttonbox)
         self.buttonbox.add_widget(self.btnT)
+        self.buttonbox.add_widget(self.btnBack)
         self.MainLayout.add_widget(self.box)
-
-        return self.MainLayout
-
-    def clearText(self, instance):
-        self.txt.text = ''
+        self.add_widget(self.MainLayout)
 
     def records(self, instance):
         val = RecordButton.record(instance)
@@ -103,5 +105,130 @@ class ClearApp(App):
         print(results)
         self.output.text = results[0]
 
+    def back(self, *args):
+        self.manager.current = 'transcribe'
+
+class TranscribeScreen(Screen):
+    def __init__(self, **kwargs):
+        super(TranscribeScreen, self).__init__(**kwargs)
+        self.MainLayout = BoxLayout(orientation='vertical')
+
+        # Row 1, text input
+        self.inputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.8))
+        self.input = TextInput(hint_text='Transcribed input', size_hint=(1, 1), disabled=True, font_size=20)
+        self.inputbox.add_widget(self.input)
+        self.MainLayout.add_widget(self.inputbox)
+
+        # Row 2, record button
+        self.recordbox = BoxLayout(orientation='vertical', size_hint=(1, 0.2))
+        self.recordbox2 = BoxLayout(orientation='horizontal', size_hint=(1, 0.8))
+        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(0.8, 1))
+        self.btnBack = Button(text='Menu', size_hint=(0.2, 1))
+        self.btnBack.bind(on_press=self.back)
+        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.2), disabled=True, font_size=12,
+                              background_color='10B3CD')
+        self.lang.text = 'Detected Language: es'
+        self.recordbox.add_widget(self.lang)
+        self.recordbox.add_widget(self.recordbox2)
+        self.recordbox2.add_widget(self.btnR)
+        self.recordbox2.add_widget(self.btnBack)
+        self.MainLayout.add_widget(self.recordbox)
+
+        self.add_widget(self.MainLayout)
+
+    def records(self, instance):
+        val = RecordButton.record(instance)
+        print(val)
+        self.lang.text = 'Detected Language: ' + str(val['language'])
+        self.input.text = val['text']
+
+    def english2output(self, instance):
+        input_text = self.txt.text
+        lang = self.lang.text[19:]
+        tokenizer.tgt_lang = lang
+        encoded_text = tokenizer(input_text, return_tensors="pt")
+        generated_tokens = model.generate(**encoded_text)
+        results = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+        print(results)
+        self.output.text = results[0]
+
+    def back(self, *args):
+        self.manager.current = 'translate'
+
+class TranslateApp(App):
+    """    def buildTranslation(self):
+        self.MainLayout = BoxLayout(orientation='vertical')
+
+        # Row 1, text input
+        self.inputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.4))
+        self.input = TextInput(hint_text='Translated input', size_hint=(1, 1), disabled=True, font_size=20)
+        self.inputbox.add_widget(self.input)
+        self.MainLayout.add_widget(self.inputbox)
+
+        # Row 2, record button
+        self.recordbox = BoxLayout(orientation='vertical', size_hint=(1, 0.2))
+        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1, 0.7))
+        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.3), disabled=True, font_size=12,
+                              background_color='10B3CD')
+        self.lang.text = 'Detected Language: es'
+        self.recordbox.add_widget(self.lang)
+        self.recordbox.add_widget(self.btnR)
+        self.MainLayout.add_widget(self.recordbox)
+
+        # Row 3, text output
+        self.outputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.4))
+        self.output = TextInput(hint_text='Translated output', size_hint=(1, 1), disabled=True, font_size=20)
+        self.outputbox.add_widget(self.output)
+        self.MainLayout.add_widget(self.outputbox)
+
+        # Bottom row, text input and one button
+        self.box = BoxLayout(orientation='horizontal', size_hint=(1, 0.2))
+        self.buttonbox = BoxLayout(orientation='vertical', size_hint=(.2, 1))
+        self.txt = TextInput(hint_text='Write here', size_hint=(.8, 1), disabled=False)
+        self.btnT = Button(text='Translate', on_press=self.english2output, size_hint=(1, .5))
+        self.btnBack = Button(text='Menu', on_press=self.screen_manager., size_hint=(1, 0.5))
+        self.box.add_widget(self.txt)
+        self.box.add_widget(self.buttonbox)
+        self.buttonbox.add_widget(self.btnT)
+        self.buttonbox.add_widget(self.btnBack)
+        self.MainLayout.add_widget(self.box)
+        return self.MainLayout
+
+    def buildTranscription(self):
+        self.MainLayout = BoxLayout(orientation='vertical')
+
+        # Row 1, text input
+        self.inputbox = BoxLayout(orientation='horizontal', size_hint=(1, 0.8))
+        self.input = TextInput(hint_text='Transcribed input', size_hint=(1, 1), disabled=True, font_size=20)
+        self.inputbox.add_widget(self.input)
+        self.MainLayout.add_widget(self.inputbox)
+
+        # Row 2, record button
+        self.recordbox = BoxLayout(orientation='vertical', size_hint=(1, 0.2))
+        self.btnR = RecordButton(text='Record Input for Transcription', on_press=self.records, size_hint=(1, 0.7))
+        self.lang = TextInput(hint_text='Detected Language: es', size_hint=(1, 0.3), disabled=True, font_size=12,
+                              background_color='10B3CD')
+        self.lang.text = 'Detected Language: es'
+        self.recordbox.add_widget(self.lang)
+        self.recordbox.add_widget(self.btnR)
+        self.MainLayout.add_widget(self.recordbox)
+
+        return self.MainLayout"""
+
+    def build(self):
+        self.screen_manager = ScreenManager()
+
+        self.translateScreen = TranslateScreen(name='translate')
+        self.transcribeScreen = TranscribeScreen(name='transcribe')
+
+        self.screen_manager.add_widget(self.translateScreen)
+        self.screen_manager.add_widget(self.transcribeScreen)
+        return self.screen_manager
+
+    def clearText(self, instance):
+        self.txt.text = ''
+
+
+
 #model = whisper.load_model("tiny")
-ClearApp().run()
+TranslateApp().run()
